@@ -1,8 +1,10 @@
 # Values for the CNTi Test Suite run of the orc8r chart on a kind cluster:
 # certificates issued by cert-manager (the chart's own certs subchart),
 # secrets created by the chart, NMS, metrics and logging off, resource
-# limits on every service, and the per-service PodDisruptionBudget off,
-# because with one replica it blocks the eviction a node drain needs.
+# limits on every service, and the per-service PodDisruptionBudgets set
+# to allow one unavailable pod: with one replica the default minAvailable
+# of 1 blocks the eviction a node drain needs, and turning the budgets
+# off renders empty documents the chart's shared template cannot produce.
 certs:
   create: true
   enabled: true
@@ -29,7 +31,9 @@ nginx:
     limits: {cpu: 500m, memory: 256Mi}
 controller:
   podDisruptionBudget:
-    enabled: false
+    enabled: true
+    minAvailable: ""
+    maxUnavailable: 1
   resources:
     requests: {cpu: 50m, memory: 64Mi}
     limits: {cpu: 500m, memory: 512Mi}
