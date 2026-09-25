@@ -52,6 +52,25 @@ jobs:
             --set primary.persistence.enabled=false --wait
           helm dependency build orc8r/cloud/helm/orc8r
 
+      # Investigation only: install the chart directly, give it five minutes,
+      # dump the state and logs of every pod that is not running, then remove
+      # it again before the suite installs it. The action uninstalls the CNF
+      # after a failed install, so this is the only place to read the logs.
+      - name: Probe the chart
+        run: |
+          set +e
+          helm upgrade --install orc8r orc8r/cloud/helm/orc8r -n orc8r -f ci/cnti-values.yaml
+          sleep 300
+          echo "::group::pods"; kubectl get pods -n orc8r -o wide; echo "::endgroup::"
+          for pod in $(kubectl get pods -n orc8r --no-headers | awk '$2 != "1/1" || $3 != "Running" {print $1}' | grep -v postgresql); do
+            echo "::group::describe $pod"; kubectl describe -n orc8r pod "$pod" | tail -40; echo "::endgroup::"
+            echo "::group::logs $pod"; kubectl logs -n orc8r "$pod" --all-containers --tail=80; echo "::endgroup::"
+            echo "::group::previous logs $pod"; kubectl logs -n orc8r "$pod" --all-containers --previous --tail=80; echo "::endgroup::"
+          done
+          echo "::group::events"; kubectl get events -n orc8r --sort-by=.lastTimestamp | grep -v Normal | tail -40; echo "::endgroup::"
+          helm uninstall orc8r -n orc8r --wait
+          kubectl delete pods -n orc8r --all --wait=true --timeout=120s
+
       - uses: lfn-cnti/testsuite-action@v1
         with:
           version: v2.0.0
