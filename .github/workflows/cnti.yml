@@ -55,6 +55,11 @@ jobs:
       - uses: lfn-cnti/testsuite-action@v1
         with:
           version: v2.0.0
+          # The action uninstalls the CNF after a failed install when it did
+          # not create the cluster, before any later step can look at the
+          # pods; at info level the suite itself logs the pod status and logs
+          # of the resource that timed out.
+          log_level: info
           create_kind_cluster: "false"
           cnf_config: cnti-testsuite.yaml
           install_timeout: 900
