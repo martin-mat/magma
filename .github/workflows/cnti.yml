@@ -1,0 +1,76 @@
+name: CNTi cert (orc8r)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cnti-cert
+  cancel-in-progress: false
+
+jobs:
+  cert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      # Nineteen services share the runner's four cores: scaling and
+      # rollouts take longer than the suite's 60-second default.
+      CNTI_TESTSUITE_GENERIC_OPERATION_TIMEOUT: "300"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            orc8r/cloud/helm
+            ci
+            cnti-testsuite.yaml
+
+      # The chart's prerequisites live outside it: cert-manager issues its
+      # certificates and PostgreSQL holds its state. Both go in before the
+      # suite, so the cluster is created here and handed to the action.
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: cnti-testsuite
+          config: ci/kind.yaml
+
+      - name: Install cert-manager and PostgreSQL
+        run: |
+          set -euo pipefail
+          helm repo add jetstack https://charts.jetstack.io
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm upgrade --install cert-manager jetstack/cert-manager \
+            --namespace cert-manager --create-namespace --set crds.enabled=true --wait
+          kubectl create namespace orc8r
+          helm upgrade --install postgresql bitnami/postgresql --namespace orc8r \
+            --set global.postgresql.auth.postgresPassword=postgres \
+            --set global.postgresql.auth.database=magma \
+            --set fullnameOverride=postgresql \
+            --set global.security.allowInsecureImages=true \
+            --set image.repository=bitnamilegacy/postgresql \
+            --set primary.persistence.enabled=false --wait
+          helm dependency build orc8r/cloud/helm/orc8r
+
+      - uses: lfn-cnti/testsuite-action@v1
+        with:
+          version: v2.0.0
+          create_kind_cluster: "false"
+          cnf_config: cnti-testsuite.yaml
+          install_timeout: 900
+          tests: cert
+
+      # Why did a service not come up? Pod state, events and logs from the
+      # cluster; it lives until the job ends.
+      - name: Diagnostics
+        if: failure()
+        run: |
+          set +e
+          echo "::group::pods"; kubectl get pods -A -o wide; echo "::endgroup::"
+          echo "::group::certificates"; kubectl get certificate,issuer -n orc8r; echo "::endgroup::"
+          echo "::group::node allocation"; kubectl describe nodes | grep -A9 "Allocated resources"; echo "::endgroup::"
+          for pod in $(kubectl get pods -n orc8r -o name | grep -v postgresql); do
+            echo "::group::describe $pod"; kubectl describe -n orc8r "$pod" | tail -40; echo "::endgroup::"
+            echo "::group::logs $pod"; kubectl logs -n orc8r "$pod" --all-containers --tail=40; echo "::endgroup::"
+          done
+          echo "::group::events"; kubectl get events -n orc8r --sort-by=.lastTimestamp | tail -60; echo "::endgroup::"

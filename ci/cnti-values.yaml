@@ -1,0 +1,35 @@
+# Values for the CNTi Test Suite run of the orc8r chart on a kind cluster:
+# certificates issued by cert-manager (the chart's own certs subchart),
+# secrets created by the chart, NMS, metrics and logging off, resource
+# limits on every service, and the per-service PodDisruptionBudget off,
+# because with one replica it blocks the eviction a node drain needs.
+certs:
+  create: true
+  enabled: true
+  domainName: magma.test
+secrets:
+  create: true
+nms:
+  enabled: false
+metrics:
+  enabled: false
+logging:
+  enabled: false
+proxy:
+  spec:
+    hostname: controller.magma.test
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {cpu: 500m, memory: 256Mi}
+nginx:
+  spec:
+    hostname: controller.magma.test
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {cpu: 500m, memory: 256Mi}
+controller:
+  podDisruptionBudget:
+    enabled: false
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {cpu: 500m, memory: 512Mi}

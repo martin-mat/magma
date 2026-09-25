@@ -1,0 +1,10 @@
+---
+# CNTi Test Suite configuration for the Orchestrator (orc8r) chart in this
+# repository; ci/cnti-values.yaml makes it runnable on a kind cluster.
+config_version: "v2"
+deployments:
+  helm_dirs:
+    - name: orc8r
+      helm_directory: orc8r/cloud/helm/orc8r
+      namespace: orc8r
+      helm_values: -f ci/cnti-values.yaml
