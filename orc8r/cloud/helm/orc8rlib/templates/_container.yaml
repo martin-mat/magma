@@ -21,6 +21,12 @@ volumeMounts:
     mountPath: /var/opt/magma/certs/{{ . }}
     readOnly: true
   {{- end }}
+  # The bootstrapper reads the root CA from a fixed path, rootCA.pem in the
+  # certs directory, which the per-certificate mounts above do not provide.
+  - name: root
+    mountPath: /var/opt/magma/certs/rootCA.pem
+    subPath: tls.crt
+    readOnly: true
   {{- else }}
   {{- range tuple "certs" "envdir" }}
   - name: {{ . }}
